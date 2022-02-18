@@ -9,7 +9,7 @@ This program will transform these FHIR messages into a more workable format.
 '''
 
 
-def handle_json(file_path):
+def load_json_data(file_path):
     """
     Function to load the JSON data from a given JSON file and create a json Object with it's data
     :param file_path: A file path to a .json file
@@ -24,7 +24,7 @@ def handle_json(file_path):
             return False
 
 
-def load_data(directory):
+def load_json_files(directory):
     """
     Function to load in any JSON files in the given starting directory.
     :param directory: A directory containing files in JSON Format
@@ -37,7 +37,7 @@ def load_data(directory):
     for f in listdir(directory):
         if isfile(join(directory, f)):
             if f[-5:] == ".json":
-                if handle_json(directory + "/" + f):
+                if load_json_data(directory + "/" + f):
                     loaded_count += 1
             else:
                 print(f+" is not a .json file")
@@ -47,4 +47,4 @@ def load_data(directory):
 
 
 if __name__ == '__main__':
-    load_data("data")
+    load_json_files("data")
