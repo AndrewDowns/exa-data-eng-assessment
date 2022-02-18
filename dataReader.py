@@ -75,6 +75,13 @@ def process_json(json_data, file_path):
         for id in identifiers:
             print("--- " + id["system"] + " | " + id["type"] + " | " + id["value"])
         print()
+        print("Events for patient:")
+        for event in json_data["entry"]:
+            if event["resource"]["resourceType"] != "Patient":
+                print(event["resource"]["resourceType"])
+        print()
+        print("-------------------------------------------")
+        print()
     else:
         print("ERROR: Patient Details not found for " + file_path)
 
