@@ -1,12 +1,91 @@
 import json
 from os import listdir
 from os.path import isfile, join
+import mysql.connector
 
 '''
 An external system / supplier is sending patient data to our platform using the FHIR standard. 
 Our analytics teams find this format difficult to work with when creating dashboards and visualizations. 
 This program will transform these FHIR messages into a more workable format.
 '''
+
+
+def connect_patient_db():
+    try:
+        return mysql.connector.connect(
+            host="localhost",
+            user="patient_db_admin",
+            password="root",
+            database="patient_database"
+        )
+    except:
+        return False
+
+
+def init_database():
+    # try to connect to the patient_database
+    if not connect_patient_db():
+        # if can't connect to patient_database as it does not exist then create it
+        print("Creating Patient Database...")
+        try:
+            root_con = mysql.connector.connect(
+                host="localhost",
+                user="patient_db_admin",
+                password="root"
+            )
+
+        except:
+            return False
+
+        root_cursor = root_con.cursor()
+
+        # create patient_database
+        root_cursor.execute("CREATE DATABASE patient_database")
+
+        con = connect_patient_db()
+        db_cursor = con.cursor()
+
+        # create patient table
+        db_cursor.execute(
+            "CREATE TABLE patient (patient_id VARCHAR(36) PRIMARY KEY, given_name VARCHAR(255), "
+            "family_name VARCHAR(255), birth_date VARCHAR(255), birth_sex VARCHAR(2), gender VARCHAR(255), "
+            "mother VARCHAR(255), marital_status VARCHAR(255), name_use VARCHAR(255), address_line VARCHAR(255), "
+            "address_city VARCHAR(255), address_state VARCHAR(255), address_country VARCHAR(255), address_latitude "
+            "DECIMAL(8,6), address_longitude DECIMAL(9,6), birth_city VARCHAR(255), birth_state VARCHAR(255), "
+            "birth_country VARCHAR(255), us_core_ethnicity VARCHAR(255), us_core_race VARCHAR(255), prefix VARCHAR("
+            "255), death_dateTime VARCHAR(255), multiple_birth VARCHAR(255), disability_adjusted_life_years FLOAT, "
+            "quality_adjusted_life_years FLOAT)")
+
+        # create patient_contact table
+        db_cursor.execute(
+            "CREATE TABLE patient_contact (patient_contact_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR(255), "
+            "contact_system VARCHAR(255), type VARCHAR(255), value VARCHAR(255))")
+
+        # create patient_identifier table
+        db_cursor.execute(
+            "CREATE TABLE patient_identifier (patient_identifier_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR("
+            "255) , "
+            "id_system VARCHAR(255), type VARCHAR(255), value VARCHAR(255), FOREIGN KEY (patient) REFERENCES "
+            "patient(patient_id))")
+
+        # create patient_language table
+        db_cursor.execute(
+            "CREATE TABLE patient_language (patient_language_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR(255), "
+            "language VARCHAR(255), FOREIGN KEY (patient) REFERENCES "
+            "patient(patient_id))")
+
+        # create patient_event table
+        db_cursor.execute(
+            "CREATE TABLE patient_event (patient_event_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR(255), "
+            "event_data VARCHAR(255), FOREIGN KEY (patient) REFERENCES "
+            "patient(patient_id))")
+
+        print("Patient Database created successfully")
+        print()
+        return True
+    else:
+        return True
+
 
 def add_patient(patient_data, patient_id):
     """
@@ -194,8 +273,12 @@ def load_json_files(directory):
 
 if __name__ == '__main__':
     # check if database exists or create if it doesn't exist
+    if init_database():
 
-    # load data files and process to fill database
-    load_json_files("data")
+        # load data files and process to fill database
+        load_json_files("data")
 
-    # load interface
+        # load interface
+
+    else:
+        print("ERROR: SERVER CURRENTLY UNAVAILABLE")
