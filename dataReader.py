@@ -11,6 +11,10 @@ This program will transform these FHIR messages into a more workable format.
 
 
 def connect_patient_db():
+    """
+    Function to connect to the patient database
+    :return: the mySql connection or False if connection fails
+    """
     try:
         return mysql.connector.connect(
             host="localhost",
@@ -19,10 +23,21 @@ def connect_patient_db():
             database="patient_database"
         )
     except:
+        print("The Patient Database does not exist.")
         return False
 
 
 def init_database():
+    """
+    Function to initialise the patient database
+    If the database exists then it will return true
+    If the database does not exist it will create the database patient_database on the mySQL server
+    along with the appropriate tables patient, patient_identifier, patient_contact, patient_event and patient_language
+
+    If the function cannot connect to the mySQL server it will return false
+
+    :return: Boolean
+    """
     # try to connect to the patient_database
     if not connect_patient_db():
         # if can't connect to patient_database as it does not exist then create it
@@ -35,51 +50,56 @@ def init_database():
             )
 
         except:
+            print("Error: cannot connect to the server")
             return False
 
         root_cursor = root_con.cursor()
 
         # create patient_database
         root_cursor.execute("CREATE DATABASE patient_database")
+        root_con.close()
 
         con = connect_patient_db()
         db_cursor = con.cursor()
 
         # create patient table
         db_cursor.execute(
-            "CREATE TABLE patient (patient_id VARCHAR(36) PRIMARY KEY, given_name VARCHAR(255), "
+            "CREATE TABLE patient (patient_id INT NOT NULL AUTO_INCREMENT, unique_id VARCHAR(37), "
+            "given_name VARCHAR(255), "
             "family_name VARCHAR(255), birth_date VARCHAR(255), birth_sex VARCHAR(2), gender VARCHAR(255), "
             "mother VARCHAR(255), marital_status VARCHAR(255), name_use VARCHAR(255), address_line VARCHAR(255), "
             "address_city VARCHAR(255), address_state VARCHAR(255), address_country VARCHAR(255), address_latitude "
             "DECIMAL(8,6), address_longitude DECIMAL(9,6), birth_city VARCHAR(255), birth_state VARCHAR(255), "
             "birth_country VARCHAR(255), us_core_ethnicity VARCHAR(255), us_core_race VARCHAR(255), prefix VARCHAR("
             "255), death_dateTime VARCHAR(255), multiple_birth VARCHAR(255), disability_adjusted_life_years FLOAT, "
-            "quality_adjusted_life_years FLOAT)")
+            "quality_adjusted_life_years FLOAT, PRIMARY KEY(patient_id))")
 
         # create patient_contact table
         db_cursor.execute(
-            "CREATE TABLE patient_contact (patient_contact_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR(255), "
-            "contact_system VARCHAR(255), type VARCHAR(255), value VARCHAR(255))")
+            "CREATE TABLE patient_contact (patient_contact_id MEDIUMINT NOT NULL AUTO_INCREMENT, patient INT, "
+            "contact_system VARCHAR(255), type VARCHAR(255), value VARCHAR(255), PRIMARY KEY(patient_contact_id), "
+            "FOREIGN KEY (patient) REFERENCES patient(patient_id))")
 
         # create patient_identifier table
         db_cursor.execute(
-            "CREATE TABLE patient_identifier (patient_identifier_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR("
-            "255) , "
-            "id_system VARCHAR(255), type VARCHAR(255), value VARCHAR(255), FOREIGN KEY (patient) REFERENCES "
+            "CREATE TABLE patient_identifier (patient_identifier_id MEDIUMINT NOT NULL AUTO_INCREMENT, patient INT , "
+            "id_system VARCHAR(255), type VARCHAR(255), value VARCHAR(255), PRIMARY KEY(patient_identifier_id), "
+            "FOREIGN KEY (patient) REFERENCES "
             "patient(patient_id))")
 
         # create patient_language table
         db_cursor.execute(
-            "CREATE TABLE patient_language (patient_language_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR(255), "
-            "language VARCHAR(255), FOREIGN KEY (patient) REFERENCES "
+            "CREATE TABLE patient_language (patient_language_id MEDIUMINT NOT NULL AUTO_INCREMENT, patient INT, "
+            "language VARCHAR(255), PRIMARY KEY(patient_language_id), FOREIGN KEY (patient) REFERENCES "
             "patient(patient_id))")
 
         # create patient_event table
         db_cursor.execute(
-            "CREATE TABLE patient_event (patient_event_id INT AUTO_INCREMENT PRIMARY KEY, patient VARCHAR(255), "
-            "event_data VARCHAR(255), FOREIGN KEY (patient) REFERENCES "
+            "CREATE TABLE patient_event (patient_event_id MEDIUMINT NOT NULL AUTO_INCREMENT, patient INT, "
+            "event_data LONGTEXT, type VARCHAR(255), PRIMARY KEY(patient_event_id), FOREIGN KEY (patient) REFERENCES "
             "patient(patient_id))")
 
+        con.close()
         print("Patient Database created successfully")
         print()
         return True
@@ -94,51 +114,77 @@ def add_patient(patient_data, patient_id):
     :param patient_id: the unique patient ID to be used when adding to the database
     :return:
     """
-    birth_date = patient_data["birthDate"]
-    birth_sex = patient_data["extension"][3]["valueCode"]
-    mothers_maiden_name = patient_data["extension"][2]["valueString"]
-    marital_status = patient_data["maritalStatus"]["text"]
-    gender = patient_data["gender"]
-    family_name = patient_data["name"][0]["family"]
-    name_use = patient_data["name"][0]["use"]
-    disability_adjusted_life_years = patient_data["extension"][5]["valueDecimal"]
-    quality_adjusted_life_years = patient_data["extension"][6]["valueDecimal"]
 
-    home_address_line = patient_data["address"][0]["line"][0]
-    home_address_city = patient_data["address"][0]["city"]
-    home_address_state = patient_data["address"][0]["state"]
-    home_address_country = patient_data["address"][0]["country"]
-    home_address_longitude = patient_data["address"][0]["extension"][0]["extension"][0]["valueDecimal"]
-    home_address_latitude = patient_data["address"][0]["extension"][0]["extension"][1]["valueDecimal"]
+    con = connect_patient_db()
+    db_cursor = con.cursor()
+    db_cursor.execute("SELECT * FROM patient WHERE unique_id='" + patient_id + "'")
+    patient = db_cursor.fetchall()
 
-    birth_place_city = patient_data["extension"][4]["valueAddress"]["city"]
-    birth_place_state = patient_data["extension"][4]["valueAddress"]["state"]
-    birth_place_country = patient_data["extension"][4]["valueAddress"]["country"]
+    # if the patient does not exist
+    if len(patient) == 0:
+        birth_date = patient_data["birthDate"]
+        birth_sex = patient_data["extension"][3]["valueCode"]
+        mothers_maiden_name = str(patient_data["extension"][2]["valueString"]).replace("'", "''")
+        marital_status = patient_data["maritalStatus"]["text"]
+        gender = patient_data["gender"]
+        family_name = str(patient_data["name"][0]["family"]).replace("'", "''")
+        name_use = patient_data["name"][0]["use"]
+        disability_adjusted_life_years = str(patient_data["extension"][5]["valueDecimal"])
+        quality_adjusted_life_years = str(patient_data["extension"][6]["valueDecimal"])
 
-    us_core_ethnicity = patient_data["extension"][1]["extension"][0]["valueCoding"]["display"]
-    us_core_race = patient_data["extension"][0]["extension"][0]["valueCoding"]["display"]
+        home_address_line = str(patient_data["address"][0]["line"][0]).replace("'", "''")
+        home_address_city = str(patient_data["address"][0]["city"]).replace("'", "''")
+        home_address_state = str(patient_data["address"][0]["state"]).replace("'", "''")
+        home_address_country = str(patient_data["address"][0]["country"]).replace("'", "''")
+        home_address_longitude = str(patient_data["address"][0]["extension"][0]["extension"][0]["valueDecimal"])
+        home_address_latitude = str(patient_data["address"][0]["extension"][0]["extension"][1]["valueDecimal"])
 
-    try:
-        prefix = patient_data["name"][0]["prefix"][0]
-    except:
-        prefix = ""
+        birth_place_city = str(patient_data["extension"][4]["valueAddress"]["city"]).replace("'", "''")
+        birth_place_state = str(patient_data["extension"][4]["valueAddress"]["state"]).replace("'", "''")
+        birth_place_country = str(patient_data["extension"][4]["valueAddress"]["country"]).replace("'", "''")
 
-    try:
-        death_date_time = patient_data["deceasedDateTime"]
-    except:
-        death_date_time = "n/a"
+        us_core_ethnicity = patient_data["extension"][1]["extension"][0]["valueCoding"]["display"]
+        us_core_race = patient_data["extension"][0]["extension"][0]["valueCoding"]["display"]
 
-    try:
-        multiple_birth = patient_data["multipleBirthBoolean"]
-    except:
-        multiple_birth = ""
+        try:
+            prefix = patient_data["name"][0]["prefix"][0]
+        except:
+            prefix = ""
 
-    given_name = ""
-    for name in patient_data["name"][0]["given"]:
-        given_name += name + " "
-    given_name = given_name[:-1]
+        try:
+            death_date_time = patient_data["deceasedDateTime"]
+        except:
+            death_date_time = "n/a"
 
-    return True
+        try:
+            multiple_birth = str(patient_data["multipleBirthBoolean"])
+        except:
+            multiple_birth = ""
+
+        given_name = ""
+        for name in patient_data["name"][0]["given"]:
+            given_name += name + " "
+        given_name = given_name[:-1].replace("'", "\'")
+
+        try:
+            sql = "INSERT INTO patient_database.patient (`patient_id`,`unique_id`,`given_name`,`family_name`," \
+                  "`birth_date`,`birth_sex`,`gender`,`mother`,`marital_status`,`name_use`,`address_line`," \
+                  "`address_city`,`address_state`,`address_country`,`address_latitude`,`address_longitude`," \
+                  "`birth_city`,`birth_state`,`birth_country`,`us_core_ethnicity`,`us_core_race`,`prefix`," \
+                  "`death_dateTime`,`multiple_birth`,`disability_adjusted_life_years`,`quality_adjusted_life_years`) " \
+                  "VALUES (NULL, '" + patient_id + "', '" + given_name + "', '" + family_name + "', '" + birth_date +\
+                  "', '" + birth_sex + "', '" + gender + "', '" + mothers_maiden_name + "', '" + marital_status + "', '" + name_use + "', '" + home_address_line + "', '" + home_address_city + "', '" + home_address_state + "','" + home_address_country + "', '" + home_address_latitude + "', '" + home_address_longitude + "', '" + birth_place_city + "', '" + birth_place_state + "', '" + birth_place_country + "', '" + us_core_ethnicity + "', '" + us_core_race + "', '" + prefix + "', '" + death_date_time + "', '" + multiple_birth + "', '" + disability_adjusted_life_years + "', '" + quality_adjusted_life_years + "') "
+            db_cursor.execute(sql.rstrip("\n"))
+            con.commit()
+        except Exception as e:
+            print()
+            print("ERROR: Could not add "+given_name+" "+family_name)
+            print()
+            con.close()
+            return None
+    db_patient_id = db_cursor.lastrowid
+    con.close()
+    return db_patient_id
 
 
 def add_patient_language(language, patient_id):
@@ -149,6 +195,17 @@ def add_patient_language(language, patient_id):
     :param patient_id: the unique patient ID for the patient in question
     :return:
     """
+
+    con = connect_patient_db()
+    db_cursor = con.cursor()
+    try:
+        sql = "INSERT INTO `patient_database`.`patient_language`(`patient_language_id`,`patient`,`language`) VALUES (NULL,'"+str(patient_id)+"','"+language+"');"
+        db_cursor.execute(sql.rstrip("\n"))
+        con.commit()
+    except Exception as e:
+        print("ERROR: Could not add language for" + patient_id)
+        con.close()
+        return False
     return True
 
 
@@ -161,11 +218,23 @@ def add_patient_identifier(identifier, patient_id):
     :return:
     """
     try:
-        identifier_type = identifier["type"]["text"]
+        identifier_type = str(identifier["type"]["text"]).replace("'","''")
     except:
         identifier_type = "-"
     identifier_system = identifier["system"]
     identifier_value = identifier["value"]
+    con = connect_patient_db()
+    db_cursor = con.cursor()
+    try:
+        sql = "INSERT INTO `patient_database`.`patient_identifier`(`patient_identifier_id`,`patient`,`id_system`,`type`,`value`)VALUES (NULL, '"+str(patient_id)+"','"+identifier_system+"', '"+identifier_type+"', '"+identifier_value+"');"
+        db_cursor.execute(sql.rstrip("\n"))
+        con.commit()
+    except Exception as e:
+        print("ERROR: Could not add identifier for" + patient_id)
+        con.close()
+        return False
+
+    con.close()
     return True
 
 
@@ -180,6 +249,20 @@ def add_patient_contact(contact_info, patient_id):
     telecom_system = contact_info["system"]
     telecom_use = contact_info["use"]
     telecom_value = contact_info["value"]
+
+    con = connect_patient_db()
+    db_cursor = con.cursor()
+    try:
+        sql = "INSERT INTO `patient_database`.`patient_contact`(`patient_contact_id`,`patient`,`contact_system`,`type`,`value`)VALUES (NULL, '" + str(
+            patient_id) + "','" + telecom_system + "', '" + telecom_use + "', '" + telecom_value + "');"
+        db_cursor.execute(sql.rstrip("\n"))
+        con.commit()
+    except Exception as e:
+        print("ERROR: Could not add identifier for" + patient_id)
+        con.close()
+        return False
+
+    con.close()
     return True
 
 
@@ -191,6 +274,20 @@ def add_event(event_data, patient_id):
     :param patient_id: the unique id for the patient related to the event
     :return: 
     """
+
+    con = connect_patient_db()
+    db_cursor = con.cursor()
+    try:
+        formatted_event_data = json.dumps(event_data).replace('"', '""').replace("'", "''")
+        sql = "INSERT INTO `patient_database`.`patient_event`(`patient_event_id`,`patient`,`event_data`, `type`)VALUES (NULL, '" + str(patient_id) + "','" + formatted_event_data + "','" + event_data["resource"]["resourceType"] + "');"
+        db_cursor.execute(sql.rstrip("\n"))
+        con.commit()
+    except Exception as e:
+        print("ERROR: Could not add event for" + patient_id)
+        con.close()
+        return False
+
+    con.close()
     return True
 
 
@@ -205,24 +302,24 @@ def process_json(json_data, file_path):
         unique_id = patient_data["id"]
 
         # Add the patient to the database
-        add_patient(patient_data, unique_id)
+        db_patient_id = add_patient(patient_data, unique_id)
 
         # record patient languages in the database
         for language in patient_data["communication"]:
-            add_patient_language(language["language"]["text"], unique_id)
+            add_patient_language(language["language"]["text"], db_patient_id)
 
         # record patient contact information in the database
         for telecom in patient_data["telecom"]:
-            add_patient_contact(telecom, unique_id)
+            add_patient_contact(telecom, db_patient_id)
 
         # record patient identifiers in the database
         for identifier in patient_data["identifier"]:
-            add_patient_identifier(identifier, unique_id)
+            add_patient_identifier(identifier, db_patient_id)
 
         # record all patient events in the database
         for event in json_data["entry"]:
             if event["resource"]["resourceType"] != "Patient":
-                add_event(event, unique_id)
+                add_event(event, db_patient_id)
 
     else:
         print("ERROR: Patient Details not found for " + file_path)
@@ -274,11 +371,7 @@ def load_json_files(directory):
 if __name__ == '__main__':
     # check if database exists or create if it doesn't exist
     if init_database():
-
         # load data files and process to fill database
         load_json_files("data")
 
         # load interface
-
-    else:
-        print("ERROR: SERVER CURRENTLY UNAVAILABLE")
