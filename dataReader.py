@@ -332,8 +332,7 @@ def process_json(json_data, file_path):
             # record all patient events in the database
             for event in json_data["entry"]:
                 if event["resource"]["resourceType"] != "Patient":
-                    pass
-                    #add_event(event, db_patient_id)
+                    add_event(event, db_patient_id)
     else:
         print("ERROR: Patient Details not found for " + file_path)
 
