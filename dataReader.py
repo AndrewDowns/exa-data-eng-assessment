@@ -281,7 +281,7 @@ def add_event(event_data, patient_id):
     con = connect_patient_db()
     db_cursor = con.cursor()
     try:
-        formatted_event_data = json.dumps(event_data).replace('"', '""').replace("'", "''")
+        formatted_event_data = json.dumps(event_data["resource"]).replace('"', '""').replace("'", "''")
         sql = "INSERT INTO `patient_database`.`patient_event`(`patient_event_id`,`patient`,`event_data`, `type`)VALUES (NULL, '" + str(
             patient_id) + "','" + formatted_event_data + "','" + event_data["resource"]["resourceType"] + "');"
         db_cursor.execute(sql.rstrip("\n"))
@@ -330,7 +330,8 @@ def process_json(json_data, file_path):
             # record all patient events in the database
             for event in json_data["entry"]:
                 if event["resource"]["resourceType"] != "Patient":
-                    add_event(event, db_patient_id)
+                    pass
+                    #add_event(event, db_patient_id)
     else:
         print("ERROR: Patient Details not found for " + file_path)
 
@@ -379,6 +380,12 @@ def load_json_files(directory):
 
 
 def create_csv_files():
+    """
+    A function to create formatted CSV files for each patient in the database
+    and all corresponding events
+    :return: True
+    """
+    print("Generating CSV files.....")
     # Check is csv folder exists if not create it
     if not os.path.isdir('csv'):
         os.mkdir('csv')
@@ -403,28 +410,34 @@ def create_csv_files():
         # Create patient file
         with open('csv/' + folder_name + '/patient.csv', 'w', encoding='UTF8', newline='') as f:
             writer = csv.writer(f)
-
-            # write the header
             writer.writerow(header)
-
-            # write multiple rows
             writer.writerow(patient)
 
-        # Create every event file
         db_cursor.execute("SELECT * FROM patient_event WHERE patient=" + str(patient[0]))
         events = db_cursor.fetchall()
 
         for event in events:
             # Create event file
-            df = pd.read_json(event[2])
-            df.to_csv('csv/' + folder_name + '/event_' + event[0] + '_' + event[3] + '.csv', index=None)
+            formatted_event_data = str(event[2]).replace("''","'").replace('""','"').replace('<div xmlns="http://www.w3.org/1999/xhtml">',"<div>").strip("\n")
+            df = pd.read_json(formatted_event_data, lines=True, encoding='utf-8-sig')
+            df.to_csv('csv/' + folder_name + '/event_' + str(event[0]) + '_' + str(event[3]) + '.csv', index=None)
 
     con.close()
+    print("CSV files generated successfully")
+    print("They are now available in the csv folder")
 
     return True
 
 
 def load_app_interface():
+    """
+    A function to display the contents of the database to the user and allow them to generate CSV files
+    at the click of a button.
+
+    Currently incomplete and not in use.
+
+    :return:
+    """
     app = Tk()
     app.title("Medical Records")
     app.geometry("900x600")
