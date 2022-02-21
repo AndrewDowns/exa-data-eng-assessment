@@ -21,10 +21,11 @@ def connect_patient_db():
     """
     try:
         return mysql.connector.connect(
-            host="localhost",
-            user="patient_db_admin",
+            host="mydb",
+            user="root",
             password="root",
-            database="patient_database"
+            database="patient_database",
+            port=3306
         )
     except:
         print("The Patient Database does not exist.")
@@ -48,9 +49,10 @@ def init_database():
         print("Creating Patient Database...")
         try:
             root_con = mysql.connector.connect(
-                host="localhost",
-                user="patient_db_admin",
-                password="root"
+                host="mydb",
+                user="root",
+                password="root",
+                port=3306
             )
 
         except:
